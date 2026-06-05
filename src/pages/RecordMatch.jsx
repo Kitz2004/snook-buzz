@@ -651,8 +651,11 @@ export default function RecordMatch() {
     const THREE_WINS   = [2, 1, 0];
     const THREE_LOSSES = [0, 1, 2];
 
-    await Promise.all(ranked.map(async (row, pos) => {
-      const won = row.rank === 1;
+    await Promise.all(ranked.map(async (row) => {
+      const pos  = row.rank - 1; // 0=1st, 1=2nd, 2=3rd
+      const won  = row.rank === 1;
+      const winsToAdd   = THREE_WINS[pos];
+      const lossesToAdd = THREE_LOSSES[pos];
       const { data: fresh } = await supabase.from("players").select("*").eq("id", row.player.id).single();
       const p = fresh || row.player;
       const streak   = won ? (p.snooker_streak >= 0 ? p.snooker_streak + 1 : 1) : (p.snooker_streak <= 0 ? p.snooker_streak - 1 : -1);
@@ -660,8 +663,8 @@ export default function RecordMatch() {
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
         snooker_matches:             (p.snooker_matches || 0) + 2,
-        snooker_wins:                (p.snooker_wins   || 0) + THREE_WINS[pos],
-        snooker_losses:              (p.snooker_losses || 0) + THREE_LOSSES[pos],
+        snooker_wins:                (p.snooker_wins   || 0) + winsToAdd,
+        snooker_losses:              (p.snooker_losses || 0) + lossesToAdd,
         snooker_streak:              streak,
         snooker_longest_win_streak:  longestW,
         snooker_longest_loss_streak: longestL,
@@ -695,8 +698,11 @@ export default function RecordMatch() {
     const FOUR_WINS   = [3, 2, 1, 0];
     const FOUR_LOSSES = [0, 1, 2, 3];
 
-    await Promise.all(ranked.map(async (row, pos) => {
-      const won = row.rank === 1;
+    await Promise.all(ranked.map(async (row) => {
+      const pos  = row.rank - 1; // 0=1st, 1=2nd, 2=3rd, 3=4th
+      const won  = row.rank === 1;
+      const winsToAdd   = FOUR_WINS[pos];
+      const lossesToAdd = FOUR_LOSSES[pos];
       const { data: fresh } = await supabase.from("players").select("*").eq("id", row.player.id).single();
       const p = fresh || row.player;
       const streak   = won ? (p.snooker_streak >= 0 ? p.snooker_streak + 1 : 1) : (p.snooker_streak <= 0 ? p.snooker_streak - 1 : -1);
@@ -704,8 +710,8 @@ export default function RecordMatch() {
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
         snooker_matches:             (p.snooker_matches || 0) + 3,
-        snooker_wins:                (p.snooker_wins   || 0) + FOUR_WINS[pos],
-        snooker_losses:              (p.snooker_losses || 0) + FOUR_LOSSES[pos],
+        snooker_wins:                (p.snooker_wins   || 0) + winsToAdd,
+        snooker_losses:              (p.snooker_losses || 0) + lossesToAdd,
         snooker_streak:              streak,
         snooker_longest_win_streak:  longestW,
         snooker_longest_loss_streak: longestL,
