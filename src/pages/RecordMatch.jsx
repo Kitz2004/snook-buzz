@@ -29,6 +29,24 @@ function calcThreePlayerElo(r1, r2, r3) {
   };
 }
 
+// 4-player ELO: run all 6 pairwise duels based on ranking order
+function calcFourPlayerElo(r1, r2, r3, r4) {
+  const d12 = calcElo(r1, r2, true);
+  const d13 = calcElo(r1, r3, true);
+  const d14 = calcElo(r1, r4, true);
+  const d23 = calcElo(r2, r3, true);
+  const d24 = calcElo(r2, r4, true);
+  const d34 = calcElo(r3, r4, true);
+  const net1 = d12.changeA + d13.changeA + d14.changeA;
+  const net2 = d12.changeB + d23.changeA + d24.changeA;
+  const net3 = d13.changeB + d23.changeB + d34.changeA;
+  const net4 = d14.changeB + d24.changeB + d34.changeB;
+  return {
+    netChange: [net1, net2, net3, net4],
+    finalElo:  [r1 + net1, r2 + net2, r3 + net3, r4 + net4],
+  };
+}
+
 // ─── THEME ───────────────────────────────────────────────────────────────────
 const T = {
   bg:        "#090b0f",
@@ -44,6 +62,7 @@ const T = {
   gold:      "#ffc53d",
   silver:    "#b4bcc8",
   bronze:    "#cd7f4e",
+  fourth:    "#7c8799",
   textPrim:  "#edf1f7",
   textSec:   "#7c8799",
   textMuted: "#4a5263",
@@ -55,6 +74,7 @@ const RANK_STYLE = {
   1: { label: "🥇 1st", color: T.gold,   glow: "rgba(255,197,61,0.08)"  },
   2: { label: "🥈 2nd", color: T.silver, glow: "rgba(180,188,200,0.06)" },
   3: { label: "🥉 3rd", color: T.bronze, glow: "rgba(205,127,78,0.06)"  },
+  4: { label: "4️⃣ 4th",  color: T.fourth, glow: "rgba(124,135,153,0.04)" },
 };
 
 // ─── GLOBAL CSS ───────────────────────────────────────────────────────────────
@@ -412,9 +432,9 @@ function ResultCard2({ result, onReset }) {
   );
 }
 
-// ─── RESULT CARD — 3-player snooker ──────────────────────────────────────────
-function ResultCard3({ result, onReset }) {
-  const { ranked } = result;
+// ─── RESULT CARD — multi-player (3 or 4) ─────────────────────────────────────
+function ResultCardMulti({ result, onReset }) {
+  const { ranked, playerCount } = result;
   return (
     <div style={{ animation: "fadeUp 0.35s cubic-bezier(0.16,1,0.3,1)" }}>
       <div style={{
@@ -439,7 +459,9 @@ function ResultCard3({ result, onReset }) {
         }}>
           {ranked[0].player.name} wins
         </div>
-        <div style={{ marginTop: 5, color: T.textMuted, fontSize: 13 }}>Snooker · 3 Players</div>
+        <div style={{ marginTop: 5, color: T.textMuted, fontSize: 13 }}>
+          Snooker · {playerCount} Players
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
@@ -515,49 +537,105 @@ function BreakInput({ playerName, value, onChange }) {
   );
 }
 
+// ─── TOGGLE BUTTON ───────────────────────────────────────────────────────────
+function TogglePlayerBtn({ active, onToggle, addLabel, removeLabel }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        width: "100%", background: "transparent",
+        border: `1px dashed ${active ? "rgba(255,77,109,0.3)" : "rgba(0,229,160,0.25)"}`,
+        borderRadius: T.radiusSm,
+        color: active ? T.red : T.green,
+        fontSize: 13, fontWeight: 600, padding: "10px 16px",
+        cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+        transition: "all 0.18s",
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = active ? T.redGlow : T.greenGlow)}
+      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+    >
+      <span style={{ fontSize: 16, lineHeight: 1 }}>{active ? "−" : "+"}</span>
+      {active ? removeLabel : addLabel}
+    </button>
+  );
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function RecordMatch() {
   const [player1,  setPlayer1]  = useState(null);
   const [player2,  setPlayer2]  = useState(null);
   const [player3,  setPlayer3]  = useState(null);
+  const [player4,  setPlayer4]  = useState(null);
   const [show3rd,  setShow3rd]  = useState(false);
+  const [show4th,  setShow4th]  = useState(false);
   const [break1,   setBreak1]   = useState("");
   const [break2,   setBreak2]   = useState("");
   const [break3,   setBreak3]   = useState("");
+  const [break4,   setBreak4]   = useState("");
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
   const [result,   setResult]   = useState(null);
 
-  const isThree = show3rd;
+  const isThree = show3rd && !show4th;
+  const isFour  = show3rd && show4th;
   const { group } = useAuth();
   const groupId   = group?.id;
 
   const toggle3rd = () => {
-    if (show3rd) { setPlayer3(null); setBreak3(""); }
-    setShow3rd(v => !v); setError("");
+    if (show3rd) {
+      // removing 3rd also removes 4th
+      setPlayer3(null); setBreak3("");
+      setPlayer4(null); setBreak4("");
+      setShow3rd(false); setShow4th(false);
+    } else {
+      setShow3rd(true);
+    }
+    setError("");
+  };
+
+  const toggle4th = () => {
+    if (show4th) {
+      setPlayer4(null); setBreak4("");
+      setShow4th(false);
+    } else {
+      setShow4th(true);
+    }
+    setError("");
   };
 
   const reset = () => {
-    setPlayer1(null); setPlayer2(null); setPlayer3(null);
-    setShow3rd(false);
-    setBreak1(""); setBreak2(""); setBreak3("");
+    setPlayer1(null); setPlayer2(null); setPlayer3(null); setPlayer4(null);
+    setShow3rd(false); setShow4th(false);
+    setBreak1(""); setBreak2(""); setBreak3(""); setBreak4("");
     setError(""); setResult(null);
   };
 
   const validate = () => {
     if (!player1 || !player2) return "Please select both players.";
     const ids = [player1.id, player2.id];
-    if (isThree) {
+    if (show3rd) {
       if (!player3) return "Please select a 3rd player, or remove the 3rd slot.";
       ids.push(player3.id);
     }
+    if (show4th) {
+      if (!player4) return "Please select a 4th player, or remove the 4th slot.";
+      ids.push(player4.id);
+    }
     if (new Set(ids).size !== ids.length) return "Players must all be different.";
-    if (!isThree && break1 === "" && break2 === "") return "Please enter break scores to determine the winner.";
-    if (!isThree && break1 !== "" && break2 !== "" && Number(break1) === Number(break2)) return "Break scores are tied — enter different scores to determine the winner.";
-    if (isThree) {
-      const scores = [break1, break2, break3].map(Number);
-      if (scores.some(isNaN) || scores.some(s => s < 0)) return "Enter valid break scores for all 3 players.";
-      if (new Set(scores).size !== 3) return "Break scores must all be different (used to rank players).";
+
+    if (!show3rd) {
+      // 2-player
+      if (break1 === "" && break2 === "") return "Please enter break scores to determine the winner.";
+      if (break1 !== "" && break2 !== "" && Number(break1) === Number(break2)) return "Break scores are tied — enter different scores to determine the winner.";
+    } else {
+      // 3 or 4 player
+      const allBreaks = show4th
+        ? [break1, break2, break3, break4]
+        : [break1, break2, break3];
+      const scores = allBreaks.map(Number);
+      if (scores.some(isNaN) || scores.some(s => s < 0)) return `Enter valid break scores for all ${show4th ? 4 : 3} players.`;
+      if (new Set(scores).size !== scores.length) return "Break scores must all be different (used to rank players).";
     }
     return null;
   };
@@ -588,7 +666,6 @@ export default function RecordMatch() {
       const newElo = won ? elo.newA : elo.newB;
       const { data: fresh } = await supabase.from("players").select("*").eq("id", player.id).single();
       const p = fresh || player;
-
       const streak   = won ? (p.snooker_streak >= 0 ? p.snooker_streak + 1 : 1) : (p.snooker_streak <= 0 ? p.snooker_streak - 1 : -1);
       const longestW = won  ? Math.max(p.snooker_longest_win_streak  || 0, streak)           : (p.snooker_longest_win_streak  || 0);
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
@@ -609,7 +686,7 @@ export default function RecordMatch() {
     setResult({ kind: "two", p1: player1, p2: player2, winner: p1Won ? player1.name : player2.name, highBreak1: break1, highBreak2: break2, eloChange1: elo.changeA, eloChange2: elo.changeB, elo1Before: r1, elo1After: elo.newA, elo2Before: r2, elo2After: elo.newB });
   };
 
-  // ─── SAVE — 3 player snooker ─────────────────────────────────────────────────
+  // ─── SAVE — 3 player ────────────────────────────────────────────────────────
   const saveThree = async () => {
     const players = [player1, player2, player3];
     const breaks  = [Number(break1), Number(break2), Number(break3)];
@@ -633,6 +710,10 @@ export default function RecordMatch() {
     const { error: mpErr } = await supabase.from("match_players").insert(mpRows);
     if (mpErr) throw mpErr;
 
+    // 3-player: 1st = 2W 0L (+2 matches), 2nd = 1W 1L (+2), 3rd = 0W 2L (+2)
+    const THREE_WINS   = [2, 1, 0];
+    const THREE_LOSSES = [0, 1, 2];
+
     await Promise.all(ranked.map(async (row, pos) => {
       const won = row.rank === 1;
       const { data: fresh } = await supabase.from("players").select("*").eq("id", row.player.id).single();
@@ -642,16 +723,65 @@ export default function RecordMatch() {
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
         snooker_elo:                 finalElo[pos],
-        snooker_matches:             (p.snooker_matches || 0) + 1,
-        snooker_wins:                (p.snooker_wins   || 0) + (won ? 1 : 0),
-        snooker_losses:              (p.snooker_losses || 0) + (won ? 0 : 1),
+        snooker_matches:             (p.snooker_matches || 0) + 2,
+        snooker_wins:                (p.snooker_wins   || 0) + THREE_WINS[pos],
+        snooker_losses:              (p.snooker_losses || 0) + THREE_LOSSES[pos],
         snooker_streak:              streak,
         snooker_longest_win_streak:  longestW,
         snooker_longest_loss_streak: longestL,
       }).eq("id", row.player.id);
     }));
 
-    setResult({ kind: "three", ranked: ranked.map((row, pos) => ({ ...row, eloBefore: r[pos], eloAfter: finalElo[pos], eloChange: netChange[pos] })) });
+    setResult({ kind: "multi", playerCount: 3, ranked: ranked.map((row, pos) => ({ ...row, eloBefore: r[pos], eloAfter: finalElo[pos], eloChange: netChange[pos] })) });
+  };
+
+  // ─── SAVE — 4 player ────────────────────────────────────────────────────────
+  const saveFour = async () => {
+    const players = [player1, player2, player3, player4];
+    const breaks  = [Number(break1), Number(break2), Number(break3), Number(break4)];
+    const order   = [0, 1, 2, 3].sort((a, b) => breaks[b] - breaks[a]);
+    const ranked  = order.map((idx, pos) => ({ player: players[idx], breakScore: breaks[idx], rank: pos + 1 }));
+    const r = ranked.map(row => row.player.snooker_elo ?? 1200);
+    const { netChange, finalElo } = calcFourPlayerElo(r[0], r[1], r[2], r[3]);
+
+    const { data: match, error: mErr } = await supabase
+      .from("matches")
+      .insert({ game_type: "Snooker", format: "race_to", race_to: 1, played_at: new Date().toISOString(), is_deleted: false, group_id: groupId })
+      .select().single();
+    if (mErr) throw mErr;
+
+    const mpRows = ranked.map((row, pos) => ({
+      match_id: match.id, player_id: row.player.id, score: row.breakScore,
+      is_winner: row.rank === 1, elo_before: r[pos], elo_after: finalElo[pos],
+      elo_change: netChange[pos], group_id: groupId,
+      ...(row.breakScore > 0 ? { highest_break: row.breakScore } : {}),
+    }));
+    const { error: mpErr } = await supabase.from("match_players").insert(mpRows);
+    if (mpErr) throw mpErr;
+
+    // 4-player: 1st = 3W 0L (+3 matches), 2nd = 2W 1L (+3), 3rd = 1W 2L (+3), 4th = 0W 3L (+3)
+    const FOUR_WINS   = [3, 2, 1, 0];
+    const FOUR_LOSSES = [0, 1, 2, 3];
+
+    await Promise.all(ranked.map(async (row, pos) => {
+      const won = row.rank === 1;
+      const { data: fresh } = await supabase.from("players").select("*").eq("id", row.player.id).single();
+      const p = fresh || row.player;
+      const streak   = won ? (p.snooker_streak >= 0 ? p.snooker_streak + 1 : 1) : (p.snooker_streak <= 0 ? p.snooker_streak - 1 : -1);
+      const longestW = won  ? Math.max(p.snooker_longest_win_streak  || 0, streak)           : (p.snooker_longest_win_streak  || 0);
+      const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
+      await supabase.from("players").update({
+        snooker_elo:                 finalElo[pos],
+        snooker_matches:             (p.snooker_matches || 0) + 3,
+        snooker_wins:                (p.snooker_wins   || 0) + FOUR_WINS[pos],
+        snooker_losses:              (p.snooker_losses || 0) + FOUR_LOSSES[pos],
+        snooker_streak:              streak,
+        snooker_longest_win_streak:  longestW,
+        snooker_longest_loss_streak: longestL,
+      }).eq("id", row.player.id);
+    }));
+
+    setResult({ kind: "multi", playerCount: 4, ranked: ranked.map((row, pos) => ({ ...row, eloBefore: r[pos], eloAfter: finalElo[pos], eloChange: netChange[pos] })) });
   };
 
   // ─── UNIFIED SAVE ────────────────────────────────────────────────────────────
@@ -660,8 +790,9 @@ export default function RecordMatch() {
     if (err) { setError(err); return; }
     setError(""); setSaving(true);
     try {
-      if (isThree) await saveThree();
-      else         await saveTwo();
+      if (isFour)       await saveFour();
+      else if (isThree) await saveThree();
+      else              await saveTwo();
     } catch (e) {
       setError(e.message || "Failed to save match.");
     } finally {
@@ -670,6 +801,8 @@ export default function RecordMatch() {
   };
 
   const excludeFor = (...others) => others.filter(Boolean).map(p => p.id);
+  const playerCount = isFour ? 4 : isThree ? 3 : 2;
+  const isMulti = isThree || isFour;
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
@@ -719,54 +852,62 @@ export default function RecordMatch() {
           boxShadow: "0 8px 48px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset",
         }}>
           {result ? (
-            result.kind === "three"
-              ? <ResultCard3 result={result} onReset={reset} />
-              : <ResultCard2 result={result} onReset={reset} />
+            result.kind === "two"
+              ? <ResultCard2 result={result} onReset={reset} />
+              : <ResultCardMulti result={result} onReset={reset} />
           ) : (
             <>
-              {/* Players */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: isThree ? 12 : 20 }}>
-                <PlayerSearch label="Player 1" value={player1} onChange={setPlayer1} excludeIds={excludeFor(player2, player3)} groupId={groupId} />
-                <PlayerSearch label="Player 2" value={player2} onChange={setPlayer2} excludeIds={excludeFor(player1, player3)} groupId={groupId} />
+              {/* Players row 1 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <PlayerSearch label="Player 1" value={player1} onChange={setPlayer1} excludeIds={excludeFor(player2, player3, player4)} groupId={groupId} />
+                <PlayerSearch label="Player 2" value={player2} onChange={setPlayer2} excludeIds={excludeFor(player1, player3, player4)} groupId={groupId} />
               </div>
 
-              {isThree && (
-                <div style={{ marginBottom: 20 }}>
-                  <PlayerSearch label="Player 3" value={player3} onChange={setPlayer3} excludeIds={excludeFor(player1, player2)} groupId={groupId} />
+              {/* Player 3 */}
+              {show3rd && (
+                <div style={{ marginBottom: 12 }}>
+                  <PlayerSearch label="Player 3" value={player3} onChange={setPlayer3} excludeIds={excludeFor(player1, player2, player4)} groupId={groupId} />
                 </div>
               )}
 
-              <div style={{ marginBottom: 20 }}>
-                <button
-                  onClick={toggle3rd}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    width: "100%", background: "transparent",
-                    border: `1px dashed ${show3rd ? "rgba(255,77,109,0.3)" : "rgba(0,229,160,0.25)"}`,
-                    borderRadius: T.radiusSm,
-                    color: show3rd ? T.red : T.green,
-                    fontSize: 13, fontWeight: 600, padding: "10px 16px",
-                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    transition: "all 0.18s",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = show3rd ? T.redGlow : T.greenGlow)}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>{show3rd ? "−" : "+"}</span>
-                  {show3rd ? "Remove 3rd Player" : "Add 3rd Player"}
-                </button>
+              {/* Player 4 — only shows if 3rd is shown */}
+              {show3rd && show4th && (
+                <div style={{ marginBottom: 12 }}>
+                  <PlayerSearch label="Player 4" value={player4} onChange={setPlayer4} excludeIds={excludeFor(player1, player2, player3)} groupId={groupId} />
+                </div>
+              )}
+
+              {/* Toggle buttons */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                <TogglePlayerBtn
+                  active={show3rd}
+                  onToggle={toggle3rd}
+                  addLabel="Add 3rd Player"
+                  removeLabel="Remove 3rd Player"
+                />
+                {show3rd && (
+                  <TogglePlayerBtn
+                    active={show4th}
+                    onToggle={toggle4th}
+                    addLabel="Add 4th Player"
+                    removeLabel="Remove 4th Player"
+                  />
+                )}
               </div>
 
               <Divider />
 
               {/* Break inputs */}
               <div style={{ marginBottom: 22 }}>
-                <Label>{isThree ? "Break Scores (determines ranking)" : "Highest Break"}</Label>
-                {isThree ? (
+                <Label>{isMulti ? "Break Scores (determines ranking)" : "Highest Break"}</Label>
+                {isMulti ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <BreakInput playerName={player1?.name ?? "Player 1"} value={break1} onChange={setBreak1} />
                     <BreakInput playerName={player2?.name ?? "Player 2"} value={break2} onChange={setBreak2} />
                     <BreakInput playerName={player3?.name ?? "Player 3"} value={break3} onChange={setBreak3} />
+                    {isFour && (
+                      <BreakInput playerName={player4?.name ?? "Player 4"} value={break4} onChange={setBreak4} />
+                    )}
                   </div>
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "center" }}>
@@ -775,7 +916,7 @@ export default function RecordMatch() {
                     <BreakInput playerName={player2?.name ?? "Player 2"} value={break2} onChange={setBreak2} />
                   </div>
                 )}
-                {isThree && (
+                {isMulti && (
                   <div style={{
                     marginTop: 10, fontSize: 11, color: T.textMuted, lineHeight: 1.5,
                     padding: "8px 10px", borderRadius: 6,
@@ -783,7 +924,10 @@ export default function RecordMatch() {
                     border: `1px solid ${T.border}`,
                     fontFamily: "'DM Mono', monospace",
                   }}>
-                    Highest break → 1st place. ELO via three 1v1 duels.
+                    {isFour
+                      ? "Highest break → 1st. 1st=3W, 2nd=2W+1L, 3rd=1W+2L, 4th=3L"
+                      : "Highest break → 1st. 1st=2W, 2nd=1W+1L, 3rd=2L"
+                    }
                   </div>
                 )}
               </div>
