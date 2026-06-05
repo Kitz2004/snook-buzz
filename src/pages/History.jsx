@@ -455,6 +455,42 @@ function MatchCard({ match, index, onDelete }) {
         .from('matches').delete().eq('id', match.id);
       if (mErr) throw mErr;
 
+      // ── Recalculate streak for each player from remaining matches ─────────
+      await Promise.all(matchPlayers.map(async (mp) => {
+        const { data: remaining } = await supabase
+          .from('match_players')
+          .select(`is_winner, matches!inner(played_at, game_type, is_deleted)`)
+          .eq('player_id', mp.player_id)
+          .eq('matches.is_deleted', false)
+          .eq(isSnookerMatch ? 'matches.game_type' : 'matches.game_type',
+              isSnookerMatch ? 'Snooker' : match.game_type)
+          .order('matches(played_at)', { ascending: false });
+
+        let streak = 0;
+        for (const row of (remaining || [])) {
+          const won = row.is_winner;
+          if (streak === 0) {
+            streak = won ? 1 : -1;
+          } else if (streak > 0 && won) {
+            streak += 1;
+          } else if (streak < 0 && !won) {
+            streak -= 1;
+          } else {
+            break;
+          }
+        }
+
+        if (isSnookerMatch) {
+          await supabase.from('players')
+            .update({ snooker_streak: streak })
+            .eq('id', mp.player_id);
+        } else {
+          await supabase.from('players')
+            .update({ current_streak: streak })
+            .eq('id', mp.player_id);
+        }
+      }));
+
       setConfirming(false);
       onDelete(match.id);
     } catch (err) {
