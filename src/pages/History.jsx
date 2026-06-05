@@ -399,7 +399,9 @@ function MatchCard({ match, index, onDelete }) {
     try {
       const isSnookerMatch = normalise(match.game_type) === 'snooker';
       const matchPlayers   = match.match_players || [];
-      const isThreePlayer  = matchPlayers.length > 2;
+      const playerCount = matchPlayers.length; // 2, 3, or 4
+      // matches added per player: 2p→1, 3p→2, 4p→3
+      const matchesPerPlayer = playerCount === 4 ? 3 : playerCount === 3 ? 2 : 1;
 
       // ── Revert each player's stats ────────────────────────────────────────
       await Promise.all(matchPlayers.map(async (mp) => {
@@ -408,7 +410,7 @@ function MatchCard({ match, index, onDelete }) {
         if (!fresh) return;
 
         const winsToRemove    = mp.score ?? (mp.is_winner ? 1 : 0);
-        const matchesToRemove = isThreePlayer ? 2 : 1;
+        const matchesToRemove = matchesPerPlayer;
         const lossesToRemove  = matchesToRemove - winsToRemove;
 
         const newMatches = Math.max(0, (fresh.snooker_matches || 0) - matchesToRemove);
