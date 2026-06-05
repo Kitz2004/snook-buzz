@@ -243,8 +243,7 @@ function PlayerSide({ mp, isSnooker, align }) {
   if (!mp) return <div style={{ flex: 1 }} />;
   const isWinner = !!mp.is_winner;
   const name     = mp.players?.name ?? `Player ${mp.player_id}`;
-  const eloStr   = fmtElo(mp.elo_change);
-  const eloNum   = Number(mp.elo_change);
+
 
   return (
     <div style={{
@@ -266,15 +265,7 @@ function PlayerSide({ mp, isSnooker, align }) {
           {name}
         </span>
       </div>
-      {eloStr != null && (
-        <span style={{
-          fontSize: 11, fontWeight: 600,
-          color: eloNum > 0 ? T.winText : eloNum < 0 ? T.red : T.textMuted,
-          fontFamily: "'DM Mono', monospace",
-        }}>
-          {eloStr} ELO
-        </span>
-      )}
+
       {isSnooker && mp.highest_break != null && (
         <span style={{
           fontSize: 11, color: T.gold, fontWeight: 600,
@@ -358,8 +349,7 @@ function ThreePlayerMatch({ players }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {sorted.map((mp, i) => {
         const name   = mp.players?.name ?? `Player ${mp.player_id}`;
-        const eloStr = fmtElo(mp.elo_change);
-        const eloNum = Number(mp.elo_change);
+
         return (
           <div key={mp.id} style={{
             display: 'grid', gridTemplateColumns: '24px 1fr auto auto',
@@ -384,15 +374,7 @@ function ThreePlayerMatch({ players }) {
                 🎱 {mp.highest_break}
               </span>
             )}
-            {eloStr != null && (
-              <span style={{
-                fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-                color: eloNum > 0 ? T.winText : eloNum < 0 ? T.red : T.textMuted,
-                fontFamily: "'DM Mono', monospace",
-              }}>
-                {eloStr}
-              </span>
-            )}
+
           </div>
         );
       })}
@@ -425,25 +407,32 @@ function MatchCard({ match, index, onDelete }) {
           .from('players').select('*').eq('id', mp.player_id).single();
         if (!fresh) return;
 
-        const winsToRemove   = mp.score ?? (mp.is_winner ? 1 : 0);
+        const winsToRemove    = mp.score ?? (mp.is_winner ? 1 : 0);
         const matchesToRemove = isThreePlayer ? 2 : 1;
         const lossesToRemove  = matchesToRemove - winsToRemove;
 
-        if (isSnookerMatch) {
+        const newMatches = Math.max(0, (fresh.snooker_matches || 0) - matchesToRemove);
+        const newWins    = Math.max(0, (fresh.snooker_wins    || 0) - winsToRemove);
+        const newLosses  = Math.max(0, (fresh.snooker_losses  || 0) - lossesToRemove);
+
+        // If no matches remain, zero everything so they disappear from the leaderboard
+        if (newMatches === 0) {
           await supabase.from('players').update({
-            snooker_elo:     mp.elo_before ?? fresh.snooker_elo,
-            snooker_matches: Math.max(0, (fresh.snooker_matches || 0) - matchesToRemove),
-            snooker_wins:    Math.max(0, (fresh.snooker_wins    || 0) - winsToRemove),
-            snooker_losses:  Math.max(0, (fresh.snooker_losses  || 0) - lossesToRemove),
+            snooker_matches:             0,
+            snooker_wins:                0,
+            snooker_losses:              0,
+            snooker_streak:              0,
+            snooker_longest_win_streak:  0,
+            snooker_longest_loss_streak: 0,
           }).eq('id', mp.player_id);
-        } else {
-          await supabase.from('players').update({
-            elo_rating:    mp.elo_before ?? fresh.elo_rating,
-            total_matches: Math.max(0, (fresh.total_matches || 0) - 1),
-            total_wins:    Math.max(0, (fresh.total_wins    || 0) - (mp.is_winner ? 1 : 0)),
-            total_losses:  Math.max(0, (fresh.total_losses  || 0) - (mp.is_winner ? 0 : 1)),
-          }).eq('id', mp.player_id);
+          return;
         }
+
+        await supabase.from('players').update({
+          snooker_matches: newMatches,
+          snooker_wins:    newWins,
+          snooker_losses:  newLosses,
+        }).eq('id', mp.player_id);
       }));
 
       // ── Delete match_players then match ───────────────────────────────────
@@ -455,16 +444,17 @@ function MatchCard({ match, index, onDelete }) {
         .from('matches').delete().eq('id', match.id);
       if (mErr) throw mErr;
 
-      // ── Recalculate streak for each player from remaining matches ─────────
+      // ── Recalculate streak from remaining matches (after deletion) ────────
       await Promise.all(matchPlayers.map(async (mp) => {
+        const { data: updated } = await supabase
+          .from('players').select('snooker_matches').eq('id', mp.player_id).single();
+        if (!updated || updated.snooker_matches === 0) return;
+
         const { data: remaining } = await supabase
           .from('match_players')
-          .select(`is_winner, matches!inner(played_at, game_type, is_deleted)`)
+          .select('is_winner, match_id')
           .eq('player_id', mp.player_id)
-          .eq('matches.is_deleted', false)
-          .eq(isSnookerMatch ? 'matches.game_type' : 'matches.game_type',
-              isSnookerMatch ? 'Snooker' : match.game_type)
-          .order('matches(played_at)', { ascending: false });
+          .order('match_id', { ascending: false });
 
         let streak = 0;
         for (const row of (remaining || [])) {
@@ -479,16 +469,9 @@ function MatchCard({ match, index, onDelete }) {
             break;
           }
         }
-
-        if (isSnookerMatch) {
-          await supabase.from('players')
-            .update({ snooker_streak: streak })
-            .eq('id', mp.player_id);
-        } else {
-          await supabase.from('players')
-            .update({ current_streak: streak })
-            .eq('id', mp.player_id);
-        }
+        await supabase.from('players')
+          .update({ snooker_streak: streak })
+          .eq('id', mp.player_id);
       }));
 
       setConfirming(false);
@@ -603,8 +586,8 @@ export default function History() {
           id, game_type, played_at, is_deleted,
           match_players (
             id, player_id, score, is_winner,
-            elo_before, elo_after, elo_change, highest_break,
-            players ( id, name, elo_rating )
+            highest_break,
+            players ( id, name )
           )
         `)
         .eq('group_id', groupId)

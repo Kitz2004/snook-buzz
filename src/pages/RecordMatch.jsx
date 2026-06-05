@@ -168,7 +168,7 @@ function PlayerSearch({ label, value, onChange, excludeIds = [], groupId }) {
       setLoading(true);
       const { data } = await supabase
         .from("players")
-        .select("id, name, snooker_elo")
+        .select("id, name")
         .ilike("name", `%${query}%`)
         .limit(8);
       setResults(data || []);
@@ -191,7 +191,7 @@ function PlayerSearch({ label, value, onChange, excludeIds = [], groupId }) {
       .from("players")
       .insert({
         name,
-        elo_rating: 1200, snooker_elo: 1200,
+
         total_matches: 0, total_wins: 0, total_losses: 0,
         current_streak: 0, longest_win_streak: 0, longest_loss_streak: 0,
         snooker_matches: 0, snooker_wins: 0, snooker_losses: 0,
@@ -269,9 +269,7 @@ function PlayerSearch({ label, value, onChange, excludeIds = [], groupId }) {
               <span style={{ color: T.textPrim, fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}>
                 {p.name}
               </span>
-              <span style={{ color: T.textMuted, fontSize: 11, fontFamily: "'DM Mono', monospace" }}>
-                {p.snooker_elo ?? 1200}
-              </span>
+
             </div>
           ))}
           {!loading && filtered.length === 0 && !showAdd && (
@@ -311,20 +309,7 @@ function PlayerSearch({ label, value, onChange, excludeIds = [], groupId }) {
   );
 }
 
-// ─── ELO CHIP ────────────────────────────────────────────────────────────────
-const EloChip = ({ change, label = "ELO" }) => (
-  <span style={{
-    display: "inline-block",
-    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
-    background: change >= 0 ? "rgba(0,229,160,0.1)" : "rgba(255,77,109,0.1)",
-    color: change >= 0 ? T.green : T.red,
-    border: `1px solid ${change >= 0 ? "rgba(0,229,160,0.2)" : "rgba(255,77,109,0.2)"}`,
-    fontFamily: "'DM Mono', monospace",
-    whiteSpace: "nowrap",
-  }}>
-    {change >= 0 ? "+" : ""}{change} {label}
-  </span>
-);
+// ─── ELO CHIP (removed) ────────────────────────────────────────────────────
 
 // ─── RESULT CARD — 2-player ───────────────────────────────────────────────────
 function ResultCard2({ result, onReset }) {
@@ -363,7 +348,6 @@ function ResultCard2({ result, onReset }) {
       }}>
         {[p1, p2].map((p, i) => {
           const isWinner = p.name === winner;
-          const change   = i === 0 ? result.eloChange1 : result.eloChange2;
           const hb       = i === 0 ? highBreak1 : highBreak2;
           return (
             <div key={p.id} style={{
@@ -373,14 +357,13 @@ function ResultCard2({ result, onReset }) {
             }}>
               <div style={{
                 fontSize: 13, color: isWinner ? T.green : T.textSec,
-                marginBottom: 8, fontWeight: 600,
+                marginBottom: hb !== "" && hb != null ? 8 : 0, fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif",
               }}>
                 {p.name}
               </div>
-              <EloChip change={change} label="Snooker ELO" />
               {hb !== "" && hb != null && (
-                <div style={{ marginTop: 8, fontSize: 11, color: T.gold, fontWeight: 600 }}>
+                <div style={{ fontSize: 11, color: T.gold, fontWeight: 600 }}>
                   🎱 Break {hb}
                 </div>
               )}
@@ -390,34 +373,6 @@ function ResultCard2({ result, onReset }) {
         <div style={{ textAlign: "center", color: T.textMuted, fontWeight: 800, fontSize: 14 }}>
           VS
         </div>
-      </div>
-
-      <div style={{
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: T.radiusSm, overflow: "hidden", marginBottom: 22,
-      }}>
-        <div style={{
-          display: "flex", justifyContent: "space-between",
-          padding: "9px 14px", borderBottom: `1px solid ${T.border}`,
-          background: "rgba(255,255,255,0.02)",
-        }}>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: T.textMuted, fontFamily: "'DM Mono', monospace" }}>Player</span>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: T.textMuted, fontFamily: "'DM Mono', monospace" }}>Snooker ELO</span>
-        </div>
-        {[p1, p2].map((p, i) => (
-          <div key={p.id} style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "11px 14px",
-            borderBottom: i === 0 ? `1px solid ${T.border}` : "none",
-          }}>
-            <span style={{ color: T.textSec, fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>{p.name}</span>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums", fontSize: 13 }}>
-              <span style={{ color: T.textMuted }}>{i === 0 ? result.elo1Before : result.elo2Before}</span>
-              <span style={{ color: T.textMuted, margin: "0 5px" }}>→</span>
-              <span style={{ color: T.textPrim, fontWeight: 600 }}>{i === 0 ? result.elo1After : result.elo2After}</span>
-            </span>
-          </div>
-        ))}
       </div>
 
       <button onClick={onReset} className="rm-save-btn" style={{
@@ -465,7 +420,7 @@ function ResultCardMulti({ result, onReset }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
-        {ranked.map(({ player, breakScore, eloChange, eloBefore, eloAfter, rank }) => {
+        {ranked.map(({ player, breakScore, rank }) => {
           const rs = RANK_STYLE[rank];
           return (
             <div key={player.id} style={{
@@ -490,15 +445,7 @@ function ResultCardMulti({ result, onReset }) {
                   <div style={{ fontSize: 11, color: T.gold, fontWeight: 600 }}>🎱 Break {breakScore}</div>
                 )}
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <EloChip change={eloChange} label="Snooker ELO" />
-                <div style={{
-                  fontSize: 10, color: T.textMuted, marginTop: 5,
-                  fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums",
-                }}>
-                  {eloBefore} → {eloAfter}
-                </div>
-              </div>
+
             </div>
           );
         })}
@@ -645,10 +592,6 @@ export default function RecordMatch() {
     const p1Won = Number(break1) > Number(break2);
     const s1 = break1 !== "" ? parseInt(break1) : 0;
     const s2 = break2 !== "" ? parseInt(break2) : 0;
-    const r1 = player1.snooker_elo ?? 1200;
-    const r2 = player2.snooker_elo ?? 1200;
-    const elo = calcElo(r1, r2, p1Won);
-
     const { data: match, error: mErr } = await supabase
       .from("matches")
       .insert({ game_type: "Snooker", format: "race_to", race_to: 1, played_at: new Date().toISOString(), is_deleted: false, group_id: groupId })
@@ -656,21 +599,19 @@ export default function RecordMatch() {
     if (mErr) throw mErr;
 
     const mpRows = [
-      { match_id: match.id, player_id: player1.id, score: s1, is_winner: p1Won,  elo_before: r1, elo_after: elo.newA, elo_change: elo.changeA, group_id: groupId, ...(break1 !== "" ? { highest_break: parseInt(break1) } : {}) },
-      { match_id: match.id, player_id: player2.id, score: s2, is_winner: !p1Won, elo_before: r2, elo_after: elo.newB, elo_change: elo.changeB, group_id: groupId, ...(break2 !== "" ? { highest_break: parseInt(break2) } : {}) },
+      { match_id: match.id, player_id: player1.id, score: s1, is_winner: p1Won,  group_id: groupId, ...(break1 !== "" ? { highest_break: parseInt(break1) } : {}) },
+      { match_id: match.id, player_id: player2.id, score: s2, is_winner: !p1Won, group_id: groupId, ...(break2 !== "" ? { highest_break: parseInt(break2) } : {}) },
     ];
     const { error: mpErr } = await supabase.from("match_players").insert(mpRows);
     if (mpErr) throw mpErr;
 
     const updatePlayer = async (player, won) => {
-      const newElo = won ? elo.newA : elo.newB;
       const { data: fresh } = await supabase.from("players").select("*").eq("id", player.id).single();
       const p = fresh || player;
       const streak   = won ? (p.snooker_streak >= 0 ? p.snooker_streak + 1 : 1) : (p.snooker_streak <= 0 ? p.snooker_streak - 1 : -1);
       const longestW = won  ? Math.max(p.snooker_longest_win_streak  || 0, streak)           : (p.snooker_longest_win_streak  || 0);
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
-        snooker_elo:                 newElo,
         snooker_matches:             (p.snooker_matches || 0) + 1,
         snooker_wins:                (p.snooker_wins   || 0) + (won ? 1 : 0),
         snooker_losses:              (p.snooker_losses || 0) + (won ? 0 : 1),
@@ -683,7 +624,7 @@ export default function RecordMatch() {
     await updatePlayer(player1, p1Won);
     await updatePlayer(player2, !p1Won);
 
-    setResult({ kind: "two", p1: player1, p2: player2, winner: p1Won ? player1.name : player2.name, highBreak1: break1, highBreak2: break2, eloChange1: elo.changeA, eloChange2: elo.changeB, elo1Before: r1, elo1After: elo.newA, elo2Before: r2, elo2After: elo.newB });
+    setResult({ kind: "two", p1: player1, p2: player2, winner: p1Won ? player1.name : player2.name, highBreak1: break1, highBreak2: break2 });
   };
 
   // ─── SAVE — 3 player ────────────────────────────────────────────────────────
@@ -692,19 +633,15 @@ export default function RecordMatch() {
     const breaks  = [Number(break1), Number(break2), Number(break3)];
     const order   = [0, 1, 2].sort((a, b) => breaks[b] - breaks[a]);
     const ranked  = order.map((idx, pos) => ({ player: players[idx], breakScore: breaks[idx], rank: pos + 1 }));
-    const r = ranked.map(row => row.player.snooker_elo ?? 1200);
-    const { netChange, finalElo } = calcThreePlayerElo(r[0], r[1], r[2]);
-
     const { data: match, error: mErr } = await supabase
       .from("matches")
       .insert({ game_type: "Snooker", format: "race_to", race_to: 1, played_at: new Date().toISOString(), is_deleted: false, group_id: groupId })
       .select().single();
     if (mErr) throw mErr;
 
-    const mpRows = ranked.map((row, pos) => ({
+    const mpRows = ranked.map((row) => ({
       match_id: match.id, player_id: row.player.id, score: row.breakScore,
-      is_winner: row.rank === 1, elo_before: r[pos], elo_after: finalElo[pos],
-      elo_change: netChange[pos], group_id: groupId,
+      is_winner: row.rank === 1, group_id: groupId,
       ...(row.breakScore > 0 ? { highest_break: row.breakScore } : {}),
     }));
     const { error: mpErr } = await supabase.from("match_players").insert(mpRows);
@@ -722,7 +659,6 @@ export default function RecordMatch() {
       const longestW = won  ? Math.max(p.snooker_longest_win_streak  || 0, streak)           : (p.snooker_longest_win_streak  || 0);
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
-        snooker_elo:                 finalElo[pos],
         snooker_matches:             (p.snooker_matches || 0) + 2,
         snooker_wins:                (p.snooker_wins   || 0) + THREE_WINS[pos],
         snooker_losses:              (p.snooker_losses || 0) + THREE_LOSSES[pos],
@@ -732,7 +668,7 @@ export default function RecordMatch() {
       }).eq("id", row.player.id);
     }));
 
-    setResult({ kind: "multi", playerCount: 3, ranked: ranked.map((row, pos) => ({ ...row, eloBefore: r[pos], eloAfter: finalElo[pos], eloChange: netChange[pos] })) });
+    setResult({ kind: "multi", playerCount: 3, ranked });
   };
 
   // ─── SAVE — 4 player ────────────────────────────────────────────────────────
@@ -741,19 +677,15 @@ export default function RecordMatch() {
     const breaks  = [Number(break1), Number(break2), Number(break3), Number(break4)];
     const order   = [0, 1, 2, 3].sort((a, b) => breaks[b] - breaks[a]);
     const ranked  = order.map((idx, pos) => ({ player: players[idx], breakScore: breaks[idx], rank: pos + 1 }));
-    const r = ranked.map(row => row.player.snooker_elo ?? 1200);
-    const { netChange, finalElo } = calcFourPlayerElo(r[0], r[1], r[2], r[3]);
-
     const { data: match, error: mErr } = await supabase
       .from("matches")
       .insert({ game_type: "Snooker", format: "race_to", race_to: 1, played_at: new Date().toISOString(), is_deleted: false, group_id: groupId })
       .select().single();
     if (mErr) throw mErr;
 
-    const mpRows = ranked.map((row, pos) => ({
+    const mpRows = ranked.map((row) => ({
       match_id: match.id, player_id: row.player.id, score: row.breakScore,
-      is_winner: row.rank === 1, elo_before: r[pos], elo_after: finalElo[pos],
-      elo_change: netChange[pos], group_id: groupId,
+      is_winner: row.rank === 1, group_id: groupId,
       ...(row.breakScore > 0 ? { highest_break: row.breakScore } : {}),
     }));
     const { error: mpErr } = await supabase.from("match_players").insert(mpRows);
@@ -771,7 +703,6 @@ export default function RecordMatch() {
       const longestW = won  ? Math.max(p.snooker_longest_win_streak  || 0, streak)           : (p.snooker_longest_win_streak  || 0);
       const longestL = !won ? Math.max(p.snooker_longest_loss_streak || 0, Math.abs(streak)) : (p.snooker_longest_loss_streak || 0);
       await supabase.from("players").update({
-        snooker_elo:                 finalElo[pos],
         snooker_matches:             (p.snooker_matches || 0) + 3,
         snooker_wins:                (p.snooker_wins   || 0) + FOUR_WINS[pos],
         snooker_losses:              (p.snooker_losses || 0) + FOUR_LOSSES[pos],
@@ -781,7 +712,7 @@ export default function RecordMatch() {
       }).eq("id", row.player.id);
     }));
 
-    setResult({ kind: "multi", playerCount: 4, ranked: ranked.map((row, pos) => ({ ...row, eloBefore: r[pos], eloAfter: finalElo[pos], eloChange: netChange[pos] })) });
+    setResult({ kind: "multi", playerCount: 4, ranked });
   };
 
   // ─── UNIFIED SAVE ────────────────────────────────────────────────────────────

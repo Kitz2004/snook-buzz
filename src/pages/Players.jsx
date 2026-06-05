@@ -844,7 +844,7 @@ export default function Players() {
     try {
       const { data: playerData, error: pErr } = await supabase
         .from("players")
-        .select("id, name, snooker_elo, snooker_matches, snooker_wins, snooker_losses, snooker_streak, snooker_longest_win_streak, snooker_longest_loss_streak")
+        .select("id, name, snooker_matches, snooker_wins, snooker_losses, snooker_streak, snooker_longest_win_streak, snooker_longest_loss_streak")
         .eq("group_id", groupId)
         .gt("snooker_matches", 0);
       if (pErr) throw pErr;
@@ -891,7 +891,6 @@ export default function Players() {
       const rows = (playerData || []).map(p => ({
         player_id:     p.id,
         name:          p.name,
-        snooker_elo:   p.snooker_elo ?? 1200,
         played:        p.snooker_matches ?? 0,
         wins:          p.snooker_wins    ?? 0,
         losses:        p.snooker_losses  ?? 0,
