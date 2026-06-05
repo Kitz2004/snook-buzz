@@ -22,8 +22,6 @@ const T = {
   winBg:     "rgba(0,229,160,0.08)",
 };
 
-
-
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const normalise = gt => (gt || '').toLowerCase();
 
@@ -39,12 +37,6 @@ function formatDateTime(dateStr) {
   const ampm  = h >= 12 ? 'pm' : 'am';
   const hour  = h % 12 || 12;
   return `${day} ${month} ${year} · ${hour}:${min}${ampm}`;
-}
-
-function fmtElo(change) {
-  if (change == null) return null;
-  const n = Number(change);
-  return (n > 0 ? '+' : '') + n;
 }
 
 // ─── GLOBAL CSS ───────────────────────────────────────────────────────────────
@@ -124,7 +116,6 @@ function ConfirmDialog({ onConfirm, onCancel, deleting }) {
           animation: 'popIn 0.18s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
-        {/* Icon */}
         <div style={{
           width: 44, height: 44, borderRadius: 12,
           background: 'rgba(255,77,109,0.1)',
@@ -244,7 +235,6 @@ function PlayerSide({ mp, isSnooker, align }) {
   const isWinner = !!mp.is_winner;
   const name     = mp.players?.name ?? `Player ${mp.player_id}`;
 
-
   return (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
@@ -341,18 +331,17 @@ function CentreWidget({ match, isSnooker, p1, p2 }) {
   );
 }
 
-// ─── 3-PLAYER LAYOUT ─────────────────────────────────────────────────────────
-function ThreePlayerMatch({ players }) {
+// ─── MULTI-PLAYER LAYOUT (3 or 4 players) ────────────────────────────────────
+function MultiPlayerMatch({ players }) {
   const sorted = [...players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  const ranks  = ['🥇', '🥈', '🥉'];
+  const ranks  = ['🥇', '🥈', '🥉', '4️⃣'];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {sorted.map((mp, i) => {
-        const name   = mp.players?.name ?? `Player ${mp.player_id}`;
-
+        const name = mp.players?.name ?? `Player ${mp.player_id}`;
         return (
           <div key={mp.id} style={{
-            display: 'grid', gridTemplateColumns: '24px 1fr auto auto',
+            display: 'grid', gridTemplateColumns: '24px 1fr auto',
             alignItems: 'center', gap: 10,
             background: i === 0 ? 'rgba(255,197,61,0.04)' : 'transparent',
             borderRadius: 8, padding: '6px 4px',
@@ -374,7 +363,6 @@ function ThreePlayerMatch({ players }) {
                 🎱 {mp.highest_break}
               </span>
             )}
-
           </div>
         );
       })}
@@ -387,21 +375,32 @@ function MatchCard({ match, index, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting,   setDeleting]   = useState(false);
 
-  const isSnooker = normalise(match.game_type) === 'snooker';
-  const players   = match.match_players || [];
-  const isThree   = players.length > 2;
-  const sorted    = [...players].sort((a, b) => (b.is_winner ? 1 : 0) - (a.is_winner ? 1 : 0));
+  const isSnooker  = normalise(match.game_type) === 'snooker';
+  const players    = match.match_players || [];
+  const isMulti    = players.length > 2;
+  const sorted     = [...players].sort((a, b) => (b.is_winner ? 1 : 0) - (a.is_winner ? 1 : 0));
   const p1 = sorted[0];
   const p2 = sorted[1];
 
   const handleConfirmDelete = async () => {
     setDeleting(true);
     try {
-      const isSnookerMatch = normalise(match.game_type) === 'snooker';
-      const matchPlayers   = match.match_players || [];
-      const playerCount = matchPlayers.length; // 2, 3, or 4
+      const matchPlayers    = match.match_players || [];
+      const playerCount     = matchPlayers.length; // 2, 3, or 4
+
       // matches added per player: 2p→1, 3p→2, 4p→3
       const matchesPerPlayer = playerCount === 4 ? 3 : playerCount === 3 ? 2 : 1;
+
+      // ── Derive rank from saved scores so we know correct wins/losses ──────
+      // (score = break score = ranking key, higher is better)
+      const sortedByScore = [...matchPlayers].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const rankMap = {};
+      sortedByScore.forEach((mp, i) => {
+        rankMap[mp.player_id] = {
+          wins:   playerCount === 4 ? 3 - i : playerCount === 3 ? 2 - i : (i === 0 ? 1 : 0),
+          losses: playerCount === 4 ? i     : playerCount === 3 ? i     : (i === 0 ? 0 : 1),
+        };
+      });
 
       // ── Revert each player's stats ────────────────────────────────────────
       await Promise.all(matchPlayers.map(async (mp) => {
@@ -409,15 +408,15 @@ function MatchCard({ match, index, onDelete }) {
           .from('players').select('*').eq('id', mp.player_id).single();
         if (!fresh) return;
 
-        const winsToRemove    = mp.score ?? (mp.is_winner ? 1 : 0);
+        const winsToRemove   = rankMap[mp.player_id].wins;
+        const lossesToRemove = rankMap[mp.player_id].losses;
         const matchesToRemove = matchesPerPlayer;
-        const lossesToRemove  = matchesToRemove - winsToRemove;
 
         const newMatches = Math.max(0, (fresh.snooker_matches || 0) - matchesToRemove);
         const newWins    = Math.max(0, (fresh.snooker_wins    || 0) - winsToRemove);
         const newLosses  = Math.max(0, (fresh.snooker_losses  || 0) - lossesToRemove);
 
-        // If no matches remain, zero everything so they disappear from the leaderboard
+        // If no matches remain, zero everything so they disappear from leaderboard
         if (newMatches === 0) {
           await supabase.from('players').update({
             snooker_matches:             0,
@@ -446,7 +445,7 @@ function MatchCard({ match, index, onDelete }) {
         .from('matches').delete().eq('id', match.id);
       if (mErr) throw mErr;
 
-      // ── Recalculate streak from remaining matches (after deletion) ────────
+      // ── Recalculate streak from remaining matches ─────────────────────────
       await Promise.all(matchPlayers.map(async (mp) => {
         const { data: updated } = await supabase
           .from('players').select('snooker_matches').eq('id', mp.player_id).single();
@@ -498,9 +497,7 @@ function MatchCard({ match, index, onDelete }) {
         {/* Top accent bar */}
         <div style={{
           height: 2,
-          background: isSnooker
-            ? 'linear-gradient(90deg, #ff4d6d, #c2185b)'
-            : 'linear-gradient(90deg, #00e5a0, #00b87e)',
+          background: 'linear-gradient(90deg, #ff4d6d, #c2185b)',
         }} />
 
         {/* Delete button */}
@@ -522,7 +519,7 @@ function MatchCard({ match, index, onDelete }) {
         </button>
 
         <div style={{ padding: '13px 15px 15px' }}>
-          {/* Meta row — give right padding so trash btn doesn't overlap timestamp */}
+          {/* Meta row */}
           <div style={{
             display: 'flex', alignItems: 'center',
             justifyContent: 'space-between', marginBottom: 12,
@@ -531,12 +528,12 @@ function MatchCard({ match, index, onDelete }) {
             <span style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
               textTransform: 'uppercase', padding: '3px 9px', borderRadius: 20,
-              background: isSnooker ? T.redGlow : T.greenGlow,
-              color: isSnooker ? T.red : T.green,
-              border: `1px solid ${isSnooker ? 'rgba(255,77,109,0.22)' : 'rgba(0,229,160,0.2)'}`,
+              background: T.redGlow,
+              color: T.red,
+              border: `1px solid rgba(255,77,109,0.22)`,
               fontFamily: "'DM Mono', monospace",
             }}>
-              🔴 Snooker{isThree ? ' · 3P' : ''}
+              🔴 Snooker{isMulti ? ` · ${players.length}P` : ''}
             </span>
             <span style={{
               fontSize: 11, color: T.textMuted,
@@ -547,8 +544,8 @@ function MatchCard({ match, index, onDelete }) {
           </div>
 
           {/* Players section */}
-          {isThree ? (
-            <ThreePlayerMatch players={players} />
+          {isMulti ? (
+            <MultiPlayerMatch players={players} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <PlayerSide mp={p1} isSnooker={isSnooker} align="left" />
@@ -610,11 +607,9 @@ export default function History() {
     if (groupId) fetchMatches();
   }, [groupId, fetchMatches]);
 
-  // Remove deleted match from local state instantly (no refetch needed)
   const handleDelete = useCallback((matchId) => {
     setMatches(prev => prev.filter(m => m.id !== matchId));
   }, []);
-
 
   return (
     <div style={{
@@ -660,7 +655,6 @@ export default function History() {
               </span>
             )}
           </div>
-
           <div style={{ paddingBottom: 14 }} />
         </div>
       </div>
