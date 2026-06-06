@@ -408,23 +408,19 @@ function MatchCard({ match, index, onDelete }) {
           .from('players').select('*').eq('id', mp.player_id).single();
         if (!fresh) return;
 
-        const winsToRemove   = rankMap[mp.player_id].wins;
-        const lossesToRemove = rankMap[mp.player_id].losses;
+        const winsToRemove    = rankMap[mp.player_id].wins;
+        const lossesToRemove  = rankMap[mp.player_id].losses;
         const matchesToRemove = matchesPerPlayer;
 
         const newMatches = Math.max(0, (fresh.snooker_matches || 0) - matchesToRemove);
         const newWins    = Math.max(0, (fresh.snooker_wins    || 0) - winsToRemove);
         const newLosses  = Math.max(0, (fresh.snooker_losses  || 0) - lossesToRemove);
 
-        // If no matches remain, zero everything so they disappear from leaderboard
         if (newMatches === 0) {
           await supabase.from('players').update({
-            snooker_matches:             0,
-            snooker_wins:                0,
-            snooker_losses:              0,
-            snooker_streak:              0,
-            snooker_longest_win_streak:  0,
-            snooker_longest_loss_streak: 0,
+            snooker_matches: 0,
+            snooker_wins:    0,
+            snooker_losses:  0,
           }).eq('id', mp.player_id);
           return;
         }
@@ -445,33 +441,20 @@ function MatchCard({ match, index, onDelete }) {
         .from('matches').delete().eq('id', match.id);
       if (mErr) throw mErr;
 
-      // ── Recalculate streak from remaining matches ─────────────────────────
+      // ── Recalculate highest break from remaining matches ──────────────────
       await Promise.all(matchPlayers.map(async (mp) => {
-        const { data: updated } = await supabase
-          .from('players').select('snooker_matches').eq('id', mp.player_id).single();
-        if (!updated || updated.snooker_matches === 0) return;
-
         const { data: remaining } = await supabase
           .from('match_players')
-          .select('is_winner, match_id')
+          .select('highest_break')
           .eq('player_id', mp.player_id)
-          .order('match_id', { ascending: false });
+          .not('highest_break', 'is', null);
 
-        let streak = 0;
-        for (const row of (remaining || [])) {
-          const won = row.is_winner;
-          if (streak === 0) {
-            streak = won ? 1 : -1;
-          } else if (streak > 0 && won) {
-            streak += 1;
-          } else if (streak < 0 && !won) {
-            streak -= 1;
-          } else {
-            break;
-          }
-        }
+        const newHighestBreak = remaining?.length
+          ? Math.max(...remaining.map(r => r.highest_break))
+          : 0;
+
         await supabase.from('players')
-          .update({ snooker_streak: streak })
+          .update({ snooker_highest_break: newHighestBreak })
           .eq('id', mp.player_id);
       }));
 
