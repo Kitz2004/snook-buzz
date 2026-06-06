@@ -336,7 +336,7 @@ function PlayerProfile({ player, onClose }) {
 
       const { data: allMp } = await supabase
         .from("match_players")
-        .select(`match_id, is_winner, matches!inner(id, game_type)`)
+        .select(`match_id, is_winner, score, matches!inner(id, game_type)`)
         .eq("player_id", player.id)
         .eq("matches.game_type", "Snooker");
       const h2hMap = {};
@@ -344,15 +344,18 @@ function PlayerProfile({ player, onClose }) {
         await Promise.all(allMp.map(async mp => {
           const { data: opps } = await supabase
             .from("match_players")
-            .select("player_id, players!inner(name)")
+            .select("player_id, score, players!inner(name)")
             .eq("match_id", mp.match_id)
-            .neq("player_id", player.id)
-            .limit(1);
-          const opp = opps?.[0];
-          if (!opp) return;
-          if (!h2hMap[opp.player_id]) h2hMap[opp.player_id] = { name: opp.players.name, wins: 0, losses: 0 };
-          if (mp.is_winner) h2hMap[opp.player_id].wins++;
-          else              h2hMap[opp.player_id].losses++;
+            .neq("player_id", player.id);
+          if (!opps?.length) return;
+          const myScore = mp.score ?? 0;
+          for (const opp of opps) {
+            const oppScore = opp.score ?? 0;
+            if (!h2hMap[opp.player_id])
+              h2hMap[opp.player_id] = { name: opp.players.name, wins: 0, losses: 0 };
+            if (myScore > oppScore) h2hMap[opp.player_id].wins++;
+            else                    h2hMap[opp.player_id].losses++;
+          }
         }));
       }
       const h2hSorted = Object.values(h2hMap).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
