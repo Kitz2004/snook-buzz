@@ -169,6 +169,7 @@ function PlayerSearch({ label, value, onChange, excludeIds = [], groupId }) {
       const { data } = await supabase
         .from("players")
         .select("id, name")
+        .eq("group_id", groupId)
         .ilike("name", `%${query}%`)
         .limit(8);
       setResults(data || []);

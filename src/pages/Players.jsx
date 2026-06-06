@@ -851,7 +851,7 @@ export default function Players() {
     try {
       const { data: playerData, error: pErr } = await supabase
         .from("players")
-        .select("id, name, snooker_matches, snooker_wins, snooker_losses, snooker_streak")
+        .select("id, name, snooker_matches, snooker_wins, snooker_losses")
         .eq("group_id", groupId)
         .gt("snooker_matches", 0);
       if (pErr) throw pErr;
