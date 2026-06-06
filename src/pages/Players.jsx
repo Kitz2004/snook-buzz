@@ -44,19 +44,14 @@ const winPctColor = p => {
 const streakFmt = s => {
   if (!s) return { label: "—", color: T.textMuted };
   return s > 0
-    ? { label: `W${s}`,        color: T.winText  }
+    ? { label: `W${s}`,           color: T.winText  }
     : { label: `L${Math.abs(s)}`, color: T.lossText };
 };
-const pad2     = n => String(n).padStart(2, "0");
-const fmtDate  = iso => {
+const pad2    = n => String(n).padStart(2, "0");
+const fmtDate = iso => {
   const d = new Date(iso);
   return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`;
 };
-const monthStart = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
-};
-const monthLabel = () => new Date().toLocaleString("default", { month: "long", year: "numeric" });
 const winRatio = (w, t) => (!t ? 0 : w / t);
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -102,7 +97,7 @@ const GLOBAL_CSS = `
   }
 `;
 
-// ─── LOADING SKELETON ─────────────────────────────────────────────────────────
+// ─── LOADING DOTS ─────────────────────────────────────────────────────────────
 function LoadingDots() {
   return (
     <div style={{
@@ -127,24 +122,6 @@ function LoadingDots() {
         Loading
       </span>
     </div>
-  );
-}
-
-// ─── STREAK CHIP ──────────────────────────────────────────────────────────────
-function StreakChip({ streak }) {
-  const { label, color } = streakFmt(streak);
-  if (!streak) return <span style={{ color: T.textFaint, fontSize: 12 }}>—</span>;
-  return (
-    <span style={{
-      display: "inline-block", padding: "2px 8px", borderRadius: 5,
-      fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
-      fontFamily: "'DM Mono', monospace",
-      background: streak > 0 ? T.winBg : T.lossBg,
-      color,
-      border: `1px solid ${streak > 0 ? "rgba(0,229,160,0.2)" : "rgba(255,77,109,0.2)"}`,
-    }}>
-      {label}
-    </span>
   );
 }
 
@@ -284,9 +261,7 @@ function H2HRow({ name, wins, losses, index }) {
 // ─── SECTION LABEL ────────────────────────────────────────────────────────────
 function SectionLabel({ children }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
-    }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
       <span style={{
         fontSize: 9, fontWeight: 700, textTransform: "uppercase",
         letterSpacing: "0.16em", color: T.textMuted,
@@ -466,9 +441,7 @@ function PlayerProfile({ player, onClose }) {
               }}>
                 {player.name}
               </div>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8, marginTop: 5, flexWrap: "wrap",
-              }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
                 <span style={{
                   background: T.winBg, color: T.winText,
                   border: `1px solid rgba(0,229,160,0.25)`,
@@ -494,14 +467,14 @@ function PlayerProfile({ player, onClose }) {
             <>
               <SectionLabel>Snooker Stats</SectionLabel>
               <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8, marginBottom: 28 }}>
-                <StatTile label="Matches"    value={snookerMatches}                                />
-                <StatTile label="Wins"       value={snookerWins}        color={T.winText}          />
-                <StatTile label="Losses"     value={snookerLosses}      color={T.lossText}         />
-                <StatTile label="Win %"      value={wp}                        color={T.green}            />
-                <StatTile label="Streak"     value={streak.label}              color={streak.color}       />
-                <StatTile label="Best W Run" value={player.snooker_longest_win_streak ?? 0}  color={T.winText}  sub="wins"   />
+                <StatTile label="Matches"    value={snookerMatches}                                          />
+                <StatTile label="Wins"       value={snookerWins}        color={T.winText}                   />
+                <StatTile label="Losses"     value={snookerLosses}      color={T.lossText}                  />
+                <StatTile label="Win %"      value={wp}                 color={T.green}                     />
+                <StatTile label="Streak"     value={streak.label}       color={streak.color}                />
+                <StatTile label="Best W Run" value={player.snooker_longest_win_streak  ?? 0} color={T.winText}  sub="wins"   />
                 <StatTile label="Best L Run" value={player.snooker_longest_loss_streak ?? 0} color={T.lossText} sub="losses" />
-                <StatTile label="Hi Break"   value={profile?.highestBreak ?? "—"} color={T.gold}     sub="snooker"/>
+                <StatTile label="Hi Break"   value={profile?.highestBreak ?? "—"}            color={T.gold}     sub="snooker"/>
               </div>
 
               {h2h.length > 0 && (
@@ -601,36 +574,7 @@ function PlayerProfile({ player, onClose }) {
   );
 }
 
-// ─── PERIOD TOGGLE ────────────────────────────────────────────────────────────
-function PeriodToggle({ value, onChange }) {
-  return (
-    <div style={{
-      display: "inline-flex", gap: 3, marginBottom: 0,
-      background: "rgba(255,255,255,0.03)",
-      border: `1px solid ${T.border}`,
-      borderRadius: 8, padding: 3,
-    }}>
-      {[{ key: "all", label: "All Time" }, { key: "month", label: monthLabel() }].map(({ key, label }) => {
-        const active = value === key;
-        return (
-          <button key={key} onClick={() => onChange(key)} style={{
-            padding: "7px 16px", borderRadius: 6, border: "none", cursor: "pointer",
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-            transition: "all 0.18s ease",
-            background: active ? T.green : "transparent",
-            color: active ? "#071a13" : T.textMuted,
-            boxShadow: active ? `0 2px 12px rgba(0,229,160,0.2)` : "none",
-          }}>
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── BREAK VIEW TOGGLE ───────────────────────────────────────────────────────
+// ─── BREAK VIEW TOGGLE ────────────────────────────────────────────────────────
 function BreakViewToggle({ value, onChange }) {
   const opts = [
     { key: "results", label: "Results" },
@@ -638,7 +582,7 @@ function BreakViewToggle({ value, onChange }) {
   ];
   return (
     <div style={{
-      display: "inline-flex", gap: 3, marginBottom: 20, marginLeft: 8,
+      display: "inline-flex", gap: 3, marginBottom: 20,
       background: "rgba(255,255,255,0.03)",
       border: `1px solid ${T.border}`,
       borderRadius: 8, padding: 3,
@@ -664,7 +608,7 @@ function BreakViewToggle({ value, onChange }) {
 }
 
 // ─── SNOOKER TABLE (desktop) ──────────────────────────────────────────────────
-function SnookerTable({ rows, period, view, onRowClick }) {
+function SnookerTable({ rows, view, onRowClick }) {
   const showBreaks = view === "breaks";
   const cols = showBreaks
     ? ["#", "Player", "Hi Break", "50+ Breaks", "Centuries"]
@@ -689,11 +633,9 @@ function SnookerTable({ rows, period, view, onRowClick }) {
         </thead>
         <tbody>
           {rows.map((row, idx) => {
-            const wins   = period === "month" ? (row.month_wins   ?? 0)  : row.wins;
-            const played = period === "month" ? (row.month_played ?? 0)  : row.played;
-            const pct    = winPct(wins, played);
+            const pct     = winPct(row.wins, row.played);
             const isMedal = idx < 3;
-            const tdBase = { padding: "13px 16px", textAlign: "right", verticalAlign: "middle", fontSize: 13, color: T.textSec, fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums" };
+            const tdBase  = { padding: "13px 16px", textAlign: "right", verticalAlign: "middle", fontSize: 13, color: T.textSec, fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums" };
             return (
               <tr
                 key={row.player_id}
@@ -747,8 +689,8 @@ function SnookerTable({ rows, period, view, onRowClick }) {
                       : <span style={{ color: T.textFaint }}>—</span>}
                   </td>
                 </>) : (<>
-                  <td style={tdBase}>{played}</td>
-                  <td style={tdBase}>{wins}</td>
+                  <td style={tdBase}>{row.played}</td>
+                  <td style={tdBase}>{row.wins}</td>
                   <td style={{ padding: "13px 16px", textAlign: "right", verticalAlign: "middle" }}>
                     <span style={{ color: winPctColor(pct), fontWeight: 600, fontSize: 13, fontFamily: "'DM Mono', monospace", fontVariantNumeric: "tabular-nums" }}>
                       {pct}
@@ -770,12 +712,10 @@ function SnookerTable({ rows, period, view, onRowClick }) {
 }
 
 // ─── SNOOKER CARD (mobile) ────────────────────────────────────────────────────
-function SnookerCard({ row, idx, period, view, onClick }) {
-  const isMedal   = idx < 3;
+function SnookerCard({ row, idx, view, onClick }) {
+  const isMedal    = idx < 3;
   const showBreaks = view === "breaks";
-  const wins    = period === "month" ? (row.month_wins   ?? 0) : row.wins;
-  const played  = period === "month" ? (row.month_played ?? 0) : row.played;
-  const pct     = winPct(wins, played);
+  const pct        = winPct(row.wins, row.played);
   return (
     <div
       onClick={() => row.playerObj && onClick(row.playerObj)}
@@ -823,9 +763,9 @@ function SnookerCard({ row, idx, period, view, onClick }) {
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: T.textSec, fontFamily: "'DM Mono', monospace" }}>
-              <span style={{ color: T.winText, fontWeight: 700 }}>{wins}W</span>
+              <span style={{ color: T.winText, fontWeight: 700 }}>{row.wins}W</span>
               {" / "}
-              {played} played
+              {row.played} played
             </span>
             <span style={{ fontSize: 11, color: winPctColor(pct), fontWeight: 600, fontFamily: "'DM Mono', monospace" }}>
               {pct}
@@ -884,9 +824,7 @@ function EmptyState({ emoji, title, subtitle }) {
         }}>
           {title}
         </div>
-        <div style={{
-          color: T.textMuted, fontSize: 13, lineHeight: 1.6, maxWidth: 260,
-        }}>
+        <div style={{ color: T.textMuted, fontSize: 13, lineHeight: 1.6, maxWidth: 260 }}>
           {subtitle}
         </div>
       </div>
@@ -896,7 +834,6 @@ function EmptyState({ emoji, title, subtitle }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Players() {
-  const [period,        setPeriod]        = useState("all");
   const [snookerRows,    setSnookerRows]    = useState([]);
   const [snookerLoading, setSnookerLoading] = useState(true);
   const [snookerError,   setSnookerError]   = useState(null);
@@ -925,7 +862,7 @@ export default function Players() {
         .eq("matches.game_type", "Snooker")
         .not("highest_break", "is", null);
 
-      const breakMap   = {};
+      const breakMap    = {};
       const breaks50Map  = {};
       const breaks100Map = {};
       for (const row of breakData || []) {
@@ -938,43 +875,15 @@ export default function Players() {
           breaks100Map[pid] = (breaks100Map[pid] || 0) + 1;
       }
 
-      const { data: monthScoreData } = await supabase
-        .from("match_players")
-        .select(`player_id, score, match_id, matches!inner(game_type, played_at)`)
-        .eq("group_id", groupId)
-        .eq("matches.game_type", "Snooker")
-        .gte("matches.played_at", monthStart());
-
-      const matchPlayerCounts = {};
-      for (const row of monthScoreData || []) {
-        matchPlayerCounts[row.match_id] = (matchPlayerCounts[row.match_id] || 0) + 1;
-      }
-
-      const monthMap = {};
-      for (const row of monthScoreData || []) {
-        const pid        = row.player_id;
-        const isThree    = (matchPlayerCounts[row.match_id] || 2) > 2;
-        const maxWins    = isThree ? 2 : 1;
-        const winsEarned = row.score ?? 0;
-        const lossesEarned = maxWins - winsEarned;
-        if (!monthMap[pid]) monthMap[pid] = { wins: 0, losses: 0, played: 0 };
-        monthMap[pid].wins   += winsEarned;
-        monthMap[pid].losses += lossesEarned;
-        monthMap[pid].played += maxWins;
-      }
-
       const rows = (playerData || []).map(p => ({
         player_id:     p.id,
         name:          p.name,
         played:        p.snooker_matches ?? 0,
         wins:          p.snooker_wins    ?? 0,
         losses:        p.snooker_losses  ?? 0,
-        highest_break: breakMap[p.id]   ?? null,
+        highest_break: breakMap[p.id]    ?? null,
         breaks50:      breaks50Map[p.id]  ?? 0,
         breaks100:     breaks100Map[p.id] ?? 0,
-        month_wins:    monthMap[p.id]?.wins   ?? 0,
-        month_losses:  monthMap[p.id]?.losses ?? 0,
-        month_played:  monthMap[p.id]?.played ?? 0,
       }));
 
       const sorted = [...rows].sort((a, b) => {
@@ -984,7 +893,6 @@ export default function Players() {
       });
       setSnookerRows(sorted);
 
-      // Build allPlayers map for profile click
       const map = {};
       for (const p of playerData || []) map[p.id] = p;
       setAllPlayers(map);
@@ -1015,16 +923,7 @@ export default function Players() {
     return () => clearInterval(tick);
   }, [lastUpdated]);
 
-  const displaySnooker = period === "month"
-    ? [...snookerRows].sort((a, b) => {
-        const ar = winRatio(a.month_wins ?? 0, a.month_played ?? 0);
-        const br = winRatio(b.month_wins ?? 0, b.month_played ?? 0);
-        if (br !== ar) return br - ar;
-        return (b.month_wins ?? 0) - (a.month_wins ?? 0);
-      })
-    : [...snookerRows];
-
-  const snookerWithObj = displaySnooker.map(r => ({ ...r, playerObj: allPlayers[r.player_id] ?? null }));
+  const snookerWithObj = snookerRows.map(r => ({ ...r, playerObj: allPlayers[r.player_id] ?? null }));
 
   return (
     <div style={{
@@ -1053,10 +952,7 @@ export default function Players() {
               Players
             </h1>
             {!snookerLoading && snookerRows.length > 0 && (
-              <span style={{
-                fontSize: 13, color: T.textMuted,
-                fontFamily: "'DM Mono', monospace",
-              }}>
+              <span style={{ fontSize: 13, color: T.textMuted, fontFamily: "'DM Mono', monospace" }}>
                 {snookerRows.length}
               </span>
             )}
@@ -1077,12 +973,8 @@ export default function Players() {
               }} />
               Live
             </span>
-
             {lastUpdated && (
-              <span style={{
-                fontSize: 11, color: T.textFaint,
-                fontFamily: "'DM Mono', monospace",
-              }}>
+              <span style={{ fontSize: 11, color: T.textFaint, fontFamily: "'DM Mono', monospace" }}>
                 Refreshes in {countdown}s
               </span>
             )}
@@ -1090,12 +982,11 @@ export default function Players() {
         </div>
 
         {/* ── Toggles row ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-          <PeriodToggle value={period} onChange={setPeriod} />
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
           <BreakViewToggle value={breakView} onChange={setBreakView} />
         </div>
 
-        {/* ── Snooker leaderboard ── */}
+        {/* ── Leaderboard ── */}
         {snookerLoading ? <LoadingDots /> :
           snookerError ? (
             <EmptyState emoji="⚠" title="Couldn't load rankings" subtitle={snookerError} />
@@ -1106,11 +997,11 @@ export default function Players() {
             <>
               <div className="lb-cards">
                 {snookerWithObj.map((r, i) => (
-                  <SnookerCard key={r.player_id} row={r} idx={i} period={period} view={breakView} onClick={setSelectedPlayer} />
+                  <SnookerCard key={r.player_id} row={r} idx={i} view={breakView} onClick={setSelectedPlayer} />
                 ))}
               </div>
               <div className="lb-table">
-                <SnookerTable rows={snookerWithObj} period={period} view={breakView} onRowClick={setSelectedPlayer} />
+                <SnookerTable rows={snookerWithObj} view={breakView} onRowClick={setSelectedPlayer} />
               </div>
             </>
           )
