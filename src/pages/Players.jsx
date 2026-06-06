@@ -303,9 +303,9 @@ function PlayerProfile({ player, onClose }) {
         .select("highest_break, matches!inner(game_type)")
         .eq("player_id", player.id)
         .eq("matches.game_type", "Snooker")
-        .order("highest_break", { ascending: false })
-        .limit(1);
-      const highestBreak = breakData?.[0]?.highest_break ?? null;
+      const highestBreak = breakData?.length ? Math.max(...breakData.map(b => b.highest_break)) : null;
+      const breaks50  = breakData?.filter(b => b.highest_break >= 50).length  ?? 0;
+      const breaks100 = breakData?.filter(b => b.highest_break >= 100).length ?? 0;
 
       const { data: mpData } = await supabase
         .from("match_players")
@@ -361,7 +361,7 @@ function PlayerProfile({ player, onClose }) {
       const h2hSorted = Object.values(h2hMap).sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
 
       if (!cancelled) {
-        setProfile({ ...player, highestBreak });
+        setProfile({ ...player, highestBreak, breaks50, breaks100 });
         setMatches(enriched);
         setH2h(h2hSorted);
         setLoading(false);
@@ -374,7 +374,6 @@ function PlayerProfile({ player, onClose }) {
   const snookerWins    = player.snooker_wins ?? 0;
   const snookerLosses  = player.snooker_losses ?? 0;
   const wp       = snookerMatches > 0 ? ((snookerWins / snookerMatches) * 100).toFixed(1) + "%" : "0.0%";
-  const streak   = streakFmt(player.snooker_streak);
   const favourite  = h2h.length ? [...h2h].sort((a, b) => b.wins   - a.wins)[0]   : null;
   const nemesis    = h2h.length ? [...h2h].sort((a, b) => b.losses - a.losses)[0] : null;
   const mostPlayed = h2h.length ? h2h[0] : null;
@@ -470,14 +469,13 @@ function PlayerProfile({ player, onClose }) {
             <>
               <SectionLabel>Snooker Stats</SectionLabel>
               <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8, marginBottom: 28 }}>
-                <StatTile label="Matches"    value={snookerMatches}                                          />
-                <StatTile label="Wins"       value={snookerWins}        color={T.winText}                   />
-                <StatTile label="Losses"     value={snookerLosses}      color={T.lossText}                  />
-                <StatTile label="Win %"      value={wp}                 color={T.green}                     />
-                <StatTile label="Streak"     value={streak.label}       color={streak.color}                />
-                <StatTile label="Best W Run" value={player.snooker_longest_win_streak  ?? 0} color={T.winText}  sub="wins"   />
-                <StatTile label="Best L Run" value={player.snooker_longest_loss_streak ?? 0} color={T.lossText} sub="losses" />
-                <StatTile label="Hi Break"   value={profile?.highestBreak ?? "—"}            color={T.gold}     sub="snooker"/>
+                <StatTile label="Matches"  value={snookerMatches}                                    />
+                <StatTile label="Wins"     value={snookerWins}             color={T.winText}         />
+                <StatTile label="Losses"   value={snookerLosses}           color={T.lossText}        />
+                <StatTile label="Win %"    value={wp}                      color={T.green}           />
+                <StatTile label="Hi Break" value={profile?.highestBreak ?? "—"} color={T.gold}  sub="snooker" />
+                <StatTile label="50+ Breaks" value={profile?.breaks50 ?? 0}  color={"#e8a838"}       />
+                <StatTile label="Centuries"  value={profile?.breaks100 ?? 0} color={T.green}         />
               </div>
 
               {h2h.length > 0 && (
@@ -853,7 +851,7 @@ export default function Players() {
     try {
       const { data: playerData, error: pErr } = await supabase
         .from("players")
-        .select("id, name, snooker_matches, snooker_wins, snooker_losses, snooker_streak, snooker_longest_win_streak, snooker_longest_loss_streak")
+        .select("id, name, snooker_matches, snooker_wins, snooker_losses, snooker_streak")
         .eq("group_id", groupId)
         .gt("snooker_matches", 0);
       if (pErr) throw pErr;
